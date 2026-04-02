@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bitflow Stableswap STX-stSTX v1.2 Audit — Clarity Audit Notes</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --accent: #f7931a;
+  --red: #f85149;
+  --yellow: #d29922;
+  --green: #3fb950;
+  --blue: #58a6ff;
+  --code-bg: #0d1117;
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  line-height: 1.6; max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+.subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem; }
+h2 { font-size: 1.3rem; margin-top: 2.5rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+h3 { font-size: 1.05rem; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+p, li { margin-bottom: 0.75rem; }
+ul, ol { padding-left: 1.5rem; }
+.severity { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; margin-right: 0.5rem; }
+.severity.critical { background: var(--red); color: #fff; }
+.severity.high { background: #da3633; color: #fff; }
+.severity.medium { background: var(--yellow); color: #000; }
+.severity.low { background: var(--blue); color: #000; }
+.severity.info { background: var(--text-muted); color: #000; }
+pre { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 1rem; overflow-x: auto; margin: 1rem 0; font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.5; }
+code { font-family: var(--font-mono); font-size: 0.9em; background: var(--surface); padding: 2px 6px; border-radius: 3px; }
+pre code { background: none; padding: 0; }
+.finding { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin: 1rem 0; }
+.finding h3 { margin-top: 0; }
+.nav { display: flex; gap: 1.5rem; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.nav a { color: var(--text-muted); font-size: 0.9rem; }
+.nav a:hover, .nav a.active { color: var(--accent); }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+.stat-card .num { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
+.stat-card .label { color: var(--text-muted); font-size: 0.85rem; }
+table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+th, td { padding: 0.5rem 0.75rem; border: 1px solid var(--border); text-align: left; }
+th { background: var(--surface); color: var(--text-muted); }
+footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a href="/clarity-audit/" class="active">Audits</a>
+  <a href="/clarity-audit/patterns.html">Clarity Patterns</a>
+  <a href="/clarity-audit/anti-patterns.html">Anti-Patterns</a>
+</nav>
+
+<h1>Bitflow Stableswap STX-stSTX v1.2 &mdash; Security Audit</h1>
+<p class="subtitle">
+  On-chain: <code><a href="https://explorer.hiro.so/txid/SPQC38PW542EQJ5M11CR25P7BS1CA6QT4TBXGB3M.stableswap-stx-ststx-v-1-2?chain=mainnet">SPQC38PW542EQJ5M11CR25P7BS1CA6QT4TBXGB3M.stableswap-stx-ststx-v-1-2</a></code> &middot;
+  1,124 lines &middot;
+  Clarity 2 &middot;
+  Audited: February 27, 2026 (v2 &mdash; updated from Feb 24 audit)
+</p>
+
+<div class="stat-grid">
+  <div class="stat-card"><div class="num" style="color: var(--red)">1</div><div class="label">Critical</div></div>
+  <div class="stat-card"><div class="num" style="color: #da3633">2</div><div class="label">High</div></div>
+  <div class="stat-card"><div class="num" style="color: var(--yellow)">4</div><div class="label">Medium</div></div>
+  <div class="stat-card"><div class="num" style="color: var(--blue)">2</div><div class="label">Low</div></div>
+  <div class="stat-card"><div class="num" style="color: var(--text-muted)">2</div><div class="label">Info</div></div>
+</div>
+
+<p><strong>Audit confidence:</strong> High &mdash; source fetched directly from Hiro API (on-chain), all findings verified against source code.</p>
+
+<h2>Executive Summary</h2>
+<p>This is a StableSwap AMM implementing the Curve-style invariant for the STX/stSTX trading pair on Bitflow. The contract handles swaps, liquidity provision/withdrawal, and fee distribution to LPs, Stacking DAO, and Bitflow protocol.</p>
+<p>The most critical finding is an <strong>inverted conditional</strong> in fee logic that causes all non-admin users to pay zero swap fees, resulting in complete protocol revenue loss. Additionally, a precision mismatch in the <code>get-dy</code> read-only function uses unscaled amounts where scaled amounts are expected.</p>
+
+<h2>Findings</h2>
+
+<table>
+  <tr><th>ID</th><th>Severity</th><th>Title</th></tr>
+  <tr><td>C-01</td><td><span class="severity critical">Critical</span></td><td>Inverted Admin Fee Logic &mdash; All Regular Users Pay Zero Fees</td></tr>
+  <tr><td>H-01</td><td><span class="severity high">High</span></td><td>No Fee Bounds Validation &mdash; Admins Can Set &gt;100% Fees</td></tr>
+  <tr><td>H-02</td><td><span class="severity high">High</span></td><td>get-dy Uses Unscaled Amount for Total Fee Calculation (Precision Mismatch)</td></tr>
+  <tr><td>M-01</td><td><span class="severity medium">Medium</span></td><td>Newton-Raphson Solver Returns Zero on Non-Convergence</td></tr>
+  <tr><td>M-02</td><td><span class="severity medium">Medium</span></td><td>Staking Contract Permanently Locked After First Set</td></tr>
+  <tr><td>M-03</td><td><span class="severity medium">Medium</span></td><td>Mutable Convergence Threshold Can Break AMM Math</td></tr>
+  <tr><td>M-04</td><td><span class="severity medium">Medium</span></td><td>swap-y-for-x total-swap-fee Omits Bitflow Fee</td></tr>
+  <tr><td>L-01</td><td><span class="severity low">Low</span></td><td>String Error Codes Instead of Uint Constants</td></tr>
+  <tr><td>L-02</td><td><span class="severity low">Low</span></td><td>Amplification Coefficient Has No Bounds</td></tr>
+  <tr><td>I-01</td><td><span class="severity info">Info</span></td><td>Clarity v2 &mdash; Uses <code>as-contract</code> Without Explicit Asset Allowances</td></tr>
+  <tr><td>I-02</td><td><span class="severity info">Info</span></td><td>Initial Pair Creation Requires Exactly Equal Scaled Balances</td></tr>
+</table>
+
+<!-- C-01 -->
+<div class="finding">
+  <h3><span class="severity critical">Critical</span> C-01: Inverted Admin Fee Logic &mdash; All Regular Users Pay Zero Fees</h3>
+  <p><strong>Location:</strong> <code>swap-x-for-y</code> (lines 331&ndash;342), <code>swap-y-for-x</code> (lines 467&ndash;478)</p>
+  <p><strong>Description:</strong> The comment says &ldquo;Admins pay no fees on swaps&rdquo; but the conditional branches are inverted. When <code>tx-sender</code> IS an admin (<code>is-some</code> returns <code>true</code>), the code assigns the full <code>buy-fees</code>/<code>sell-fees</code>. When NOT an admin, it assigns <code>admin-swap-fees</code> which is initialized to all zeros.</p>
+<pre><code>;; Admins pay no fees on swaps
+(swap-fee-lps (if (is-some (index-of (var-get admins) tx-sender))
+    (get lps (var-get buy-fees))        ;; Admin &rarr; full fees (WRONG)
+    (get lps (var-get admin-swap-fees))  ;; Non-admin &rarr; zero fees (WRONG)
+))</code></pre>
+  <p><strong>Impact:</strong> Every non-admin swap executes with zero fees. The protocol earns no swap revenue. LPs receive no fee income from swaps. Stacking DAO and Bitflow protocol receive zero fee distributions. This is a direct and total loss of protocol revenue.</p>
+
+<pre><code>;; Exploit test for C-01: Regular users pay zero fees
+(define-public (test-exploit-c01-zero-fees)
+  (let
+    (
+      ;; admin-swap-fees defaults to {lps: u0, stacking-dao: u0, bitflow: u0}
+      ;; Non-admin users hit the else branch, getting zero fees
+      ;; Result: full swap amount passes through with no fee deduction
+      (fee-check (var-get admin-swap-fees))
+    )
+    ;; Verify all fee components are zero for non-admins
+    (asserts! (is-eq (get lps fee-check) u0) (err u1))
+    (asserts! (is-eq (get stacking-dao fee-check) u0) (err u2))
+    (asserts! (is-eq (get bitflow fee-check) u0) (err u3))
+    (ok true)
+  )
+)</code></pre>
+
+  <p><strong>Recommendation:</strong> Swap the conditional branches:</p>
+<pre><code>(swap-fee-lps (if (is-some (index-of (var-get admins) tx-sender))
+    (get lps (var-get admin-swap-fees))  ;; Admin &rarr; zero/reduced fees
+    (get lps (var-get buy-fees))          ;; Non-admin &rarr; standard fees
+))</code></pre>
+</div>
+
+<!-- H-01 -->
+<div class="finding">
+  <h3><span class="severity high">High</span> H-01: No Fee Bounds Validation &mdash; Admins Can Set Arbitrarily High Fees</h3>
+  <p><strong>Location:</strong> <code>change-buy-fee</code>, <code>change-sell-fee</code>, <code>change-admin-swap-fee</code>, <code>change-liquidity-fee</code></p>
+  <p><strong>Description:</strong> All fee-setting functions accept any <code>uint</code> value with no upper bound validation. An admin can set combined fees above 10,000 bps (100%).</p>
+<pre><code>(define-public (change-buy-fee (new-lps-fee uint) (new-protocol-fee uint) (new-bitflow-fee uint))
+    (let ((current-admins (var-get admins)))
+        (asserts! (is-some (index-of current-admins tx-sender)) (err "err-not-admin"))
+        ;; No bound check!
+        (ok (var-set buy-fees {lps: new-lps-fee, stacking-dao: new-protocol-fee, bitflow: new-bitflow-fee}))
+    )
+)</code></pre>
+  <p><strong>Impact:</strong> Fees &gt;100% cause arithmetic underflow in swap functions, reverting all transactions. A compromised or malicious admin could DoS the entire pool. Even without malice, an accidental misconfiguration could freeze swaps.</p>
+  <p><strong>Recommendation:</strong> Add bounds checking:</p>
+<pre><code>(asserts! (&lt;= (+ new-lps-fee new-protocol-fee new-bitflow-fee) u10000) (err "err-fee-too-high"))</code></pre>
+</div>
+
+<!-- H-02 -->
+<div class="finding">
+  <h3><span class="severity high">High</span> H-02: get-dy Uses Unscaled Amount for Total Fee Calculation (Precision Mismatch)</h3>
+  <p><strong>Location:</strong> <code>get-dy</code> (line 249)</p>
+  <p><strong>Description:</strong> The individual fee calculations correctly use <code>x-amount-scaled</code>, but <code>x-amount-total-fees-scaled</code> uses the raw unscaled <code>x-amount</code>. This value is then subtracted from the scaled amount to compute <code>updated-x-amount-scaled</code>.</p>
+<pre><code>;; Individual fees use scaled amount (correct):
+(x-amount-fees-lps-scaled (/ (* x-amount-scaled swap-fee-lps) u10000))
+(x-amount-fees-stacking-dao-scaled (/ (* x-amount-scaled swap-fee-stacking-dao) u10000))
+(x-amount-fees-bitflow-scaled (/ (* x-amount-scaled swap-fee-bitflow) u10000))
+
+;; Total fee uses UNSCALED amount (BUG):
+(x-amount-total-fees-scaled (/ (* x-amount total-swap-fee) u10000))
+(updated-x-amount-scaled (- x-amount-scaled x-amount-total-fees-scaled))</code></pre>
+  <p><strong>Impact:</strong> For pairs where x-decimals &lt; y-decimals, the fee subtracted is much smaller than intended, resulting in inflated <code>dy</code> quotes. For STX/stSTX (both 6 decimals), scaling is identity so there is no practical impact on this specific pool. However, the actual <code>swap-x-for-y</code> function computes fees individually (correctly), so quotes diverge from execution.</p>
+  <p><strong>Recommendation:</strong> Use <code>x-amount-scaled</code> consistently:</p>
+<pre><code>(x-amount-total-fees-scaled (/ (* x-amount-scaled total-swap-fee) u10000))</code></pre>
+</div>
+
+<!-- M-01 -->
+<div class="finding">
+  <h3><span class="severity medium">Medium</span> M-01: Newton-Raphson Solver Returns Zero on Non-Convergence</h3>
+  <p><strong>Location:</strong> <code>get-x</code>, <code>get-y</code>, <code>get-D</code></p>
+  <p><strong>Description:</strong> The iterative solvers use a <code>converged</code> field initialized to <code>u0</code>. If convergence is not achieved within 384 iterations, <code>u0</code> is returned as the result.</p>
+<pre><code>(get converged (fold x-for-loop index-list
+    {x: current-D, c: c2, b: b, D: current-D, converged: u0}))</code></pre>
+  <p><strong>Impact:</strong> Non-convergence returns zero, causing swap output to be zero. The <code>min-amount</code> assertion would catch this and revert. However, if <code>get-D</code> returns zero, the fee and share calculations in <code>add-liquidity</code> would divide by zero (runtime abort).</p>
+  <p><strong>Recommendation:</strong> Return the last iteration value instead of zero on non-convergence, or add explicit convergence checks before using results.</p>
+</div>
+
+<!-- M-02 -->
+<div class="finding">
+  <h3><span class="severity medium">Medium</span> M-02: Staking Contract Permanently Locked After First Set</h3>
+  <p><strong>Location:</strong> <code>set-staking-contract</code></p>
+  <p><strong>Description:</strong> A boolean flag <code>staking-and-rewards-contract-is-set</code> prevents the staking contract from ever being changed after the first call.</p>
+<pre><code>(asserts! (not is-set) (err "err-staking-and-rewards-contract-already-assigned"))
+(var-set staking-and-rewards-contract staking-contract)
+(var-set staking-and-rewards-contract-is-set true)</code></pre>
+  <p><strong>Impact:</strong> If the staking/rewards contract needs migration (bug fix, upgrade), LP fee distributions are permanently locked to the original address. Other fee recipients (stacking-dao, bitflow) can be freely changed by admins.</p>
+  <p><strong>Recommendation:</strong> Either allow admin updates (with timelock) or document this as an intentional immutability guarantee.</p>
+</div>
+
+<!-- M-03 -->
+<div class="finding">
+  <h3><span class="severity medium">Medium</span> M-03: Mutable Convergence Threshold Can Break AMM Math</h3>
+  <p><strong>Location:</strong> <code>change-convergence-threshold</code>, used in <code>x-for-loop</code>, <code>y-for-loop</code>, <code>D-for-loop</code></p>
+  <p><strong>Description:</strong> The convergence threshold is admin-mutable and used by all Newton-Raphson solvers. Setting it too high accepts wildly inaccurate results; setting it to <code>u0</code> may prevent convergence entirely (returning zero per M-01).</p>
+<pre><code>(define-public (change-convergence-threshold (new-convergence-threshold uint))
+    ;; No bounds check
+    (ok (var-set convergence-threshold new-convergence-threshold))
+)</code></pre>
+  <p><strong>Impact:</strong> A threshold of <code>u1000000</code> could accept first-iteration approximations, leading to incorrect swap amounts and potential arbitrage extraction. A threshold of <code>u0</code> causes all swaps to fail.</p>
+  <p><strong>Recommendation:</strong> Bound to a safe range, e.g., <code>u1</code> to <code>u10</code>.</p>
+</div>
+
+<!-- M-04 -->
+<div class="finding">
+  <h3><span class="severity medium">Medium</span> M-04: swap-y-for-x total-swap-fee Omits Bitflow Fee</h3>
+  <p><strong>Location:</strong> <code>swap-y-for-x</code> (line 480)</p>
+  <p><strong>Description:</strong> The <code>total-swap-fee</code> variable in <code>swap-y-for-x</code> only sums LP and Stacking DAO fees, omitting Bitflow:</p>
+<pre><code>(total-swap-fee (+ swap-fee-lps swap-fee-stacking-dao))  ;; Missing: swap-fee-bitflow</code></pre>
+  <p><strong>Impact:</strong> Currently dead code &mdash; <code>total-swap-fee</code> is not used in the actual fee calculations (fees are applied individually). However, this indicates a copy-paste error and creates risk if the variable is used in future refactoring.</p>
+  <p><strong>Recommendation:</strong> Add the missing term: <code>(total-swap-fee (+ swap-fee-lps swap-fee-stacking-dao swap-fee-bitflow))</code></p>
+</div>
+
+<!-- L-01 -->
+<div class="finding">
+  <h3><span class="severity low">Low</span> L-01: String Error Codes Instead of Uint Constants</h3>
+  <p><strong>Description:</strong> All error returns use string literals (e.g., <code>(err "err-not-admin")</code>) instead of uint error codes. String errors consume more block space and are harder to programmatically handle.</p>
+  <p><strong>Recommendation:</strong> Use <code>(define-constant ERR-NOT-ADMIN (err u1000))</code> pattern for gas efficiency and easier integration.</p>
+</div>
+
+<!-- L-02 -->
+<div class="finding">
+  <h3><span class="severity low">Low</span> L-02: Amplification Coefficient Has No Bounds</h3>
+  <p><strong>Location:</strong> <code>change-amplification-coefficient</code></p>
+  <p><strong>Description:</strong> The amplification coefficient (A) can be set to any uint. A=0 degenerates to constant-product. Very high A values could cause overflow in the D calculation.</p>
+<pre><code>(define-public (change-amplification-coefficient (y-token ...) (lp-token ...) (amplification-coefficient uint))
+    ;; No bounds check on amplification-coefficient
+    (ok (map-set PairsDataMap ... {amplification-coefficient: amplification-coefficient}))
+)</code></pre>
+  <p><strong>Recommendation:</strong> Enforce reasonable bounds (e.g., <code>u1</code> to <code>u5000</code>) and consider implementing ramping (gradual changes) as done in Curve.</p>
+</div>
+
+<!-- I-01 -->
+<div class="finding">
+  <h3><span class="severity info">Info</span> I-01: Clarity v2 &mdash; Uses <code>as-contract</code> Without Explicit Asset Allowances</h3>
+  <p><strong>Description:</strong> This contract uses Clarity v2 which only has <code>as-contract</code> (blanket authority). Clarity 4 introduced <code>as-contract?</code> with <code>with-stx</code>, <code>with-ft</code>, <code>with-nft</code> allowances that restrict exactly which assets the contract can move. Upgrading would provide defense-in-depth against potential token contract exploits.</p>
+</div>
+
+<!-- I-02 -->
+<div class="finding">
+  <h3><span class="severity info">Info</span> I-02: Initial Pair Creation Requires Exactly Equal Scaled Balances</h3>
+  <p><strong>Location:</strong> <code>create-pair</code></p>
+  <p><strong>Description:</strong> The <code>create-pair</code> function asserts <code>(is-eq initial-x-bal-scaled initial-y-bal-scaled)</code>, requiring exactly 1:1 initial deposits after decimal scaling. While appropriate for a stableswap pool (assets should be near parity), this prevents initial seeding at market-rate ratios if the peg has drifted.</p>
+</div>
+
+<h2>Recommendations (Priority Order)</h2>
+<ol>
+  <li><strong>Fix C-01 immediately</strong> &mdash; swap the conditional branches in both swap functions to restore fee collection</li>
+  <li><strong>Add fee bounds (H-01)</strong> &mdash; cap total fees at 10,000 bps</li>
+  <li><strong>Fix get-dy precision (H-02)</strong> &mdash; use <code>x-amount-scaled</code> in total fee calculation</li>
+  <li><strong>Bound convergence threshold (M-03)</strong> and amplification coefficient (L-02)</li>
+  <li><strong>Consider migration path</strong> for staking contract (M-02)</li>
+</ol>
+
+<footer>
+  <p>Independent audit by <a href="https://github.com/cocoa007">cocoa007.btc</a> &middot; <a href="/clarity-audit/">Full audit portfolio</a></p>
+  <p>Updated February 27, 2026 (v2 &mdash; added H-02 precision mismatch finding). Original audit: February 24, 2026.</p>
+</footer>
+
+</body>
+</html>

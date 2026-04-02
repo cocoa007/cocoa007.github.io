@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>stSTXbtc Tracking v2 Audit — Clarity Audit Notes</title>
+<style>
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--text-muted:#8b949e;--accent:#f7931a;--red:#f85149;--yellow:#d29922;--green:#3fb950;--blue:#58a6ff;--code-bg:#0d1117;--font-mono:'SF Mono','Fira Code','Cascadia Code',monospace}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;line-height:1.6;max-width:860px;margin:0 auto;padding:2rem 1.5rem}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+h1{font-size:2rem;margin-bottom:.25rem;color:var(--accent)}
+.subtitle{color:var(--text-muted);font-size:1rem;margin-bottom:2rem}
+h2{font-size:1.4rem;margin-top:2.5rem;margin-bottom:1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border)}
+h3{font-size:1.1rem;margin-top:1.5rem;margin-bottom:.5rem}
+p,li{margin-bottom:.75rem}
+ul,ol{padding-left:1.5rem}
+code{font-family:var(--font-mono);font-size:.85em;background:var(--code-bg);padding:.15em .4em;border-radius:4px;border:1px solid var(--border)}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{border:none;padding:0;font-size:.85rem;line-height:1.5}
+.meta{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem 1.25rem;margin-bottom:2rem}
+.meta p{margin-bottom:.25rem;font-size:.9rem}
+.finding{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.25rem;margin:1.25rem 0}
+.finding h3{margin-top:0}
+.severity-critical{border-left:4px solid var(--red)}
+.severity-high{border-left:4px solid #f0883e}
+.severity-medium{border-left:4px solid var(--yellow)}
+.severity-low{border-left:4px solid var(--blue)}
+.severity-info{border-left:4px solid var(--text-muted)}
+.tag{display:inline-block;font-size:.75rem;padding:.1em .5em;border-radius:4px;font-weight:600;margin-right:.5rem}
+.tag-critical{background:var(--red);color:#fff}
+.tag-high{background:#f0883e;color:#fff}
+.tag-medium{background:var(--yellow);color:#000}
+.tag-low{background:var(--blue);color:#fff}
+.tag-info{background:var(--text-muted);color:#000}
+.back{display:inline-block;margin-bottom:1.5rem;font-size:.9rem}
+table{width:100%;border-collapse:collapse;margin:1rem 0}
+th,td{text-align:left;padding:.5rem .75rem;border:1px solid var(--border)}
+th{background:var(--surface)}
+</style>
+</head>
+<body>
+<a class="back" href="/clarity-audit/">← Back to index</a>
+
+<h1>stSTXbtc Tracking v2 — Security Audit</h1>
+<p class="subtitle">sBTC reward distribution system for stSTXbtc holders — tracks wallet &amp; external protocol positions</p>
+
+<div class="meta">
+  <p><strong>Contract:</strong>
+  On-chain: <code><a href="https://explorer.hiro.so/txid/SP4SZE494VC2YC5JYG7AYFQ44F5Q4PYV7DVMDPBG.ststxbtc-tracking-v2?chain=mainnet">SP4SZE494VC2YC5JYG7AYFQ44F5Q4PYV7DVMDPBG.ststxbtc-tracking-v2</a></code> · ~180 lines</p>
+  <p><strong>Data contract:</strong> <code>SP4SZE494VC2YC5JYG7AYFQ44F5Q4PYV7DVMDPBG.ststxbtc-tracking-data-v2</code></p>
+  <p><strong>Clarity version:</strong> Pre-Clarity 4 (uses <code>as-contract</code>, not <code>as-contract?</code>)</p>
+  <p><strong>Source:</strong> Verified via Hiro API — on-chain source matches local copy</p>
+  <p><strong>Date:</strong> February 27, 2026</p>
+  <p><strong>Auditor:</strong> <a href="https://github.com/cocoa007">cocoa007.btc</a></p>
+  <p><strong>Audit confidence: Medium.</strong> Single-contract logic is straightforward. Depends on external <code>.dao</code>, <code>.ststxbtc-tracking-data-v2</code>, <code>.sbtc-token</code>, and dynamic position-trait contracts. Core reward math and position lifecycle reviewed thoroughly; DAO governance trust assumptions noted.</p>
+</div>
+
+<h2>Architecture Overview</h2>
+<p>This contract distributes sBTC rewards to holders of stSTXbtc tokens. It supports two types of positions:</p>
+<ol>
+<li><strong>Wallet positions:</strong> Tracked via <code>refresh-wallet</code> — a DAO-approved protocol updates a holder's balance directly.</li>
+<li><strong>External protocol positions:</strong> Tracked via <code>refresh-position</code> — calls a <code>position-trait</code> contract to get the holder's balance in an external protocol (e.g., AMM LP).</li>
+</ol>
+<p>Rewards are added via <code>add-rewards</code>, which computes a per-token cumulative reward. When positions refresh, pending rewards are saved. Holders claim via <code>claim-pending-rewards</code>, which transfers sBTC from the contract.</p>
+<p>The data contract (<code>ststxbtc-tracking-data-v2</code>) stores all state: total supply, cumulative reward, holder positions, supported positions registry. All its setters are gated by <code>.dao check-is-protocol</code>.</p>
+
+<h2>Documented Limitations</h2>
+<ul>
+<li>Protocol depends on DAO governance for contract registry and access control</li>
+<li>Position trait contracts are trusted to report accurate balances</li>
+<li>Reserve mechanism caps external position growth to prevent over-allocation</li>
+</ul>
+
+<h2>Priority Score</h2>
+<table>
+<tr><th>Metric</th><th>Score</th><th>Rationale</th></tr>
+<tr><td>Financial risk (×3)</td><td>3</td><td>Holds and transfers sBTC; DeFi reward distribution</td></tr>
+<tr><td>Deployment likelihood (×2)</td><td>3</td><td>Deployed on mainnet</td></tr>
+<tr><td>Code complexity (×2)</td><td>2</td><td>~180 lines, multi-contract with traits</td></tr>
+<tr><td>User exposure (×1.5)</td><td>3</td><td>StackingDAO — major Stacks protocol</td></tr>
+<tr><td>Novelty (×1.5)</td><td>2</td><td>Reward distribution with position abstraction</td></tr>
+<tr><td colspan="2"><strong>Score: 2.65</strong></td><td>Well above 1.8 threshold</td></tr>
+</table>
+
+<h2>Summary</h2>
+
+<table>
+<tr><th>Severity</th><th>Count</th></tr>
+<tr><td><span class="tag tag-high">HIGH</span></td><td>1</td></tr>
+<tr><td><span class="tag tag-medium">MEDIUM</span></td><td>3</td></tr>
+<tr><td><span class="tag tag-low">LOW</span></td><td>2</td></tr>
+<tr><td><span class="tag tag-info">INFO</span></td><td>3</td></tr>
+</table>
+
+<h2>Findings</h2>
+
+<div class="finding severity-high">
+<h3><span class="tag tag-high">H-01</span> Reward truncation in <code>add-rewards</code> silently loses small deposits</h3>
+<p><strong>Location:</strong> <code>add-rewards</code></p>
+<p><strong>Description:</strong> The <code>reward-added-per-token</code> calculation divides by <code>total-supply</code> and truncates to integer. While the contract multiplies by <code>u10000000000</code> (10-decimal precision) before dividing, the truncation manifests when reward amounts are small relative to total supply. For example, if <code>amount = u1</code> (1 sat) and <code>total-supply = u20000000000</code> (200 BTC worth of stSTXbtc), then <code>reward-added-per-token = (1 × 10^10) / 2×10^10 = 0</code> — the entire reward is lost. The sBTC transfers into the contract but zero rewards are distributed.</p>
+<pre><code>(reward-added-per-token (/ (* amount u10000000000) 
+  (contract-call? .ststxbtc-tracking-data-v2 get-total-supply)))</code></pre>
+<p><strong>Impact:</strong> Small reward deposits (relative to total supply) are silently absorbed — sBTC transfers in but zero rewards are distributed. The tokens are permanently locked in the contract. The truncation also accumulates over many <code>add-rewards</code> calls — each call loses up to <code>total-supply / 10^10</code> sats.</p>
+<p><strong>Recommendation:</strong> Add <code>(asserts! (&gt; reward-added-per-token u0) (err ERR_REWARD_TOO_SMALL))</code> to prevent silent loss. Alternatively, accumulate a dust remainder across calls.</p>
+</div>
+
+<div class="finding severity-medium">
+<h3><span class="tag tag-medium">M-01</span> Pre-Clarity 4 <code>as-contract</code> grants blanket asset authority</h3>
+<p><strong>Location:</strong> <code>claim-pending-rewards</code>, <code>withdraw-tokens</code></p>
+<p><strong>Description:</strong> The contract uses <code>as-contract</code> in two places to transfer sBTC. In pre-Clarity 4, this grants unrestricted access to ALL assets held by the contract principal — not just the intended sBTC transfer. If any contract called within the <code>as-contract</code> scope had a reentrancy vector, it could drain all contract-held assets.</p>
+<pre><code>;; claim-pending-rewards
+(try! (as-contract (contract-call? .sbtc-token transfer pending-rewards tx-sender holder none)))
+
+;; withdraw-tokens
+(try! (as-contract (contract-call? .sbtc-token transfer amount tx-sender recipient none)))</code></pre>
+<p><strong>Impact:</strong> If the referenced <code>.sbtc-token</code> contract is malicious or compromised, all contract assets could be drained in a single call.</p>
+<p><strong>Recommendation:</strong> Migrate to Clarity 4's <code>as-contract?</code> with <code>with-ft .sbtc-token sbtc</code> to restrict asset scope to only the intended token.</p>
+</div>
+
+<div class="finding severity-medium">
+<h3><span class="tag tag-medium">M-02</span> <code>claim-pending-rewards</code> is callable by anyone for any holder</h3>
+<p><strong>Location:</strong> <code>claim-pending-rewards</code></p>
+<p><strong>Description:</strong> The function takes a <code>holder</code> parameter and has no access control — anyone can call it for any holder. While rewards are always sent to the correct <code>holder</code> address (not the caller), this allows third parties to trigger claims without consent.</p>
+<pre><code>(define-public (claim-pending-rewards (holder principal) (position principal))
+  (let (
+    (pending-rewards (unwrap-panic (get-pending-rewards holder position)))
+  )
+    ;; No check that tx-sender == holder or is authorized
+    (asserts! (var-get claims-enabled) (err ERR_CLAIMS_DISABLED))
+    ...</code></pre>
+<p><strong>Impact:</strong> Anyone can force a holder to receive sBTC rewards at any time. In jurisdictions with taxable-on-receipt rules, this could create unwanted tax events. Also enables griefing by claiming tiny amounts to reset saved-rewards state.</p>
+<p><strong>Recommendation:</strong> Add <code>(asserts! (is-eq tx-sender holder) (err ERR_NOT_AUTHORIZED))</code>, or gate permissionless claims behind a DAO-approved caller check. The batch function could remain DAO-only for administrative use.</p>
+</div>
+
+<div class="finding severity-medium">
+<h3><span class="tag tag-medium">M-03</span> Reserve check in <code>refresh-position</code> uses potentially stale data</h3>
+<p><strong>Location:</strong> <code>refresh-position</code></p>
+<p><strong>Description:</strong> The reserve check reads the reserve principal's position amount from storage. If the reserve principal's actual balance has decreased since last refresh, the stored value is stale-high, allowing more external positions than the reserve currently supports.</p>
+<pre><code>(supported-position-reserve (get amount (contract-call? .ststxbtc-tracking-data-v2 
+  get-holder-position (get reserve supported-position) (get reserve supported-position))))
+
+(asserts! (not (and 
+  (&gt; new-position-balance prev-position-balance) 
+  (&gt; supported-position-new-total supported-position-reserve))) 
+  (err ERR_OVER_RESERVE))</code></pre>
+<p><strong>Impact:</strong> External positions could exceed the actual reserve amount if the reserve holder's stored balance is stale. The severity depends on how frequently the reserve holder's position is refreshed.</p>
+<p><strong>Recommendation:</strong> Fetch the reserve's live balance via the position trait rather than relying on stored (potentially stale) values. Alternatively, ensure the reserve holder is always refreshed before external positions.</p>
+</div>
+
+<div class="finding severity-low">
+<h3><span class="tag tag-low">L-01</span> <code>unwrap-panic</code> in reward calculation paths</h3>
+<p><strong>Location:</strong> <code>save-pending-rewards</code>, <code>claim-pending-rewards</code></p>
+<p><strong>Description:</strong> Both functions use <code>unwrap-panic</code> on <code>get-pending-rewards</code>. Since <code>get-pending-rewards</code> always returns <code>(ok ...)</code>, the panic is unreachable — but if the function signature ever changes, the entire transaction would abort without a meaningful error.</p>
+<pre><code>(pending-rewards (unwrap-panic (get-pending-rewards holder position)))</code></pre>
+<p><strong>Impact:</strong> No current risk; defensive coding concern.</p>
+<p><strong>Recommendation:</strong> Replace with <code>(try! (get-pending-rewards holder position))</code>.</p>
+</div>
+
+<div class="finding severity-low">
+<h3><span class="tag tag-low">L-02</span> Position reactivation permanently blocked after deactivation</h3>
+<p><strong>Location:</strong> <code>set-supported-positions</code></p>
+<p><strong>Description:</strong> Activation requires <code>(is-eq (get total supported-position) u0)</code>. Deactivation sets total to the current non-zero value. Once deactivated, a position can never be reactivated — its total is permanently non-zero.</p>
+<pre><code>;; Activation requires total == 0
+(asserts! (is-eq (get total supported-position) u0) (err ERR_POSITION_USED))
+;; Deactivation sets total to current value
+(contract-call? .ststxbtc-tracking-data-v2 set-supported-positions 
+  position-address active (get reserve supported-position) 
+  (get total supported-position) ...)</code></pre>
+<p><strong>Impact:</strong> Protocol integrations are one-way — temporary disable/re-enable requires a new contract address. Likely intentional to prevent reward accounting issues.</p>
+<p><strong>Recommendation:</strong> Document this behavior. The data contract's <code>set-supported-positions</code> could be called directly by DAO to reset total if reactivation is needed.</p>
+</div>
+
+<div class="finding severity-info">
+<h3><span class="tag tag-info">I-01</span> TODO comments reference placeholder <code>.sbtc-token</code></h3>
+<p><strong>Location:</strong> <code>add-rewards</code>, <code>claim-pending-rewards</code>, <code>withdraw-tokens</code></p>
+<p><strong>Description:</strong> Three TODO comments state "update with mainnet sbtc token". Since the contract is deployed, references are immutable. The <code>.sbtc-token</code> resolves to <code>SP4SZE494VC2YC5JYG7AYFQ44F5Q4PYV7DVMDPBG.sbtc-token</code> — StackingDAO's own wrapper, not necessarily the canonical sBTC contract.</p>
+<p><strong>Impact:</strong> The TODOs are cosmetic post-deployment. However, their presence suggests the contract may need redeployment if the intended sBTC token differs from the deployed reference.</p>
+<p><strong>Recommendation:</strong> Verify the deployed <code>.sbtc-token</code> is the intended token. If it's a wrapper, document the wrapper's trust assumptions.</p>
+</div>
+
+<div class="finding severity-info">
+<h3><span class="tag tag-info">I-02</span> Position contracts (reserve addresses) always receive zero rewards</h3>
+<p><strong>Location:</strong> <code>get-pending-rewards</code></p>
+<p><strong>Description:</strong> If the <code>holder</code> is an active supported position contract, the function returns <code>(ok u0)</code> regardless of actual pending rewards. This prevents position contracts from accumulating rewards — correct by design since their underlying users earn individually.</p>
+<pre><code>(is-holder-position (get active (contract-call? .ststxbtc-tracking-data-v2 
+  get-supported-positions holder)))
+(if is-holder-position (ok u0) (ok (+ rewards rewards-saved)))</code></pre>
+<p><strong>Impact:</strong> Informational — correct by design but could surprise integrators.</p>
+</div>
+
+<div class="finding severity-info">
+<h3><span class="tag tag-info">I-03</span> Rounding consistently favors the protocol</h3>
+<p><strong>Location:</strong> <code>add-rewards</code>, <code>get-pending-rewards</code></p>
+<p><strong>Description:</strong> Integer division truncation occurs in two places: (1) <code>reward-added-per-token</code> truncates when dividing by total supply, and (2) per-holder rewards truncate when dividing by <code>u10000000000</code>. Both round down. The 10-decimal precision mitigates this to sub-satoshi levels for most practical amounts.</p>
+<p><strong>Impact:</strong> Negligible dust — standard for integer-arithmetic reward systems.</p>
+</div>
+
+<h2>Positive Observations</h2>
+<ul>
+<li><strong>Clean separation of logic and data.</strong> Tracking contract handles logic; data contract stores all state. Both gated by DAO protocol checks.</li>
+<li><strong>10-decimal precision for reward math.</strong> The <code>u10000000000</code> multiplier provides good precision for per-token reward tracking.</li>
+<li><strong>Reserve mechanism for external positions.</strong> Prevents unbounded external protocol positions from diluting wallet holders' rewards.</li>
+<li><strong>Deactivation snapshots cumulative reward.</strong> <code>deactivated-cumm-reward</code> freezes reward accrual at deactivation — clean lifecycle.</li>
+<li><strong>Batch claim support.</strong> <code>claim-pending-rewards-many</code> enables efficient processing of up to 200 positions.</li>
+<li><strong>Emergency controls.</strong> <code>claims-enabled</code> flag and <code>withdraw-tokens</code> provide shutdown and recovery capabilities.</li>
+<li><strong>Consistent DAO access control.</strong> All admin functions and data writes go through <code>.dao check-is-protocol</code>.</li>
+</ul>
+
+<h2>Related Audits</h2>
+<ul>
+<li><a href="stacking-dao-core-v4.html">StackingDAO Core v4</a> — the parent stacking protocol</li>
+<li><a href="stacking-dao-core-v3.html">StackingDAO Core v3</a></li>
+<li><a href="ststx-token.html">stSTX Token</a></li>
+</ul>
+
+<p style="margin-top:3rem;color:var(--text-muted);font-size:.85rem">
+  Audit by <a href="https://github.com/cocoa007">cocoa007.btc</a> · <a href="/clarity-audit/">Full audit portfolio</a>
+</p>
+
+</body>
+</html>
